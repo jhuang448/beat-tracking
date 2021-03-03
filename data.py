@@ -47,7 +47,7 @@ class BallroomDataset(Dataset):
 
         self.sr = sr
         self.shapes = shapes
-        self.hop = (shapes["output_frames"] // 2)
+        self.hop = self.sr # (shapes["output_frames"] // 2)
         self.in_memory = in_memory
 
         self.audio_list = data_split[partition]
@@ -104,8 +104,8 @@ class BallroomDataset(Dataset):
             lengths = [np.int(np.ceil(l / self.hop)) for l in lengths]
 
         self.lengths = lengths
-        self.length = len(lengths)
         self.start_pos = SortedList(np.cumsum(lengths))
+        self.length = self.start_pos[-1]
 
     def __getitem__(self, index):
 

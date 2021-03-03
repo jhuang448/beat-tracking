@@ -31,7 +31,7 @@ model = BeatTrackingModel(
         hparams['n_class'], hparams['n_feats'], hparams['stride'], hparams['dropout'], hparams['input_sample']
 )
 
-state = utils.load_model(model, None, "checkpoints/dummy/checkpoint_32", False)
+state = utils.load_model(model, None, "checkpoints/dummy/checkpoint_4", False)
 
 dbn = DBNBeatTrackingProcessor(
     min_bpm=55,
@@ -56,11 +56,11 @@ def beatTracker(inputFile):
 
     total_length = all_outputs.shape[1]
 
-    print(all_outputs.shape)  # batch, length, classes
+    # print(all_outputs.shape)  # batch, length, classes
     _, _, num_classes = all_outputs.shape
 
     song_pred = torch.softmax(all_outputs, dim=2).data.numpy().view(-1)
-    print(song_pred.shape)  # total_length, num_classes
+    # print(song_pred.shape)  # total_length, num_classes
 
     resolution = 1024 / 44100
 
