@@ -18,7 +18,7 @@ hparams = {
         "n_cnn_layers": 2,
         "n_rnn_layers": 3,
         "rnn_dim": 25,
-        "n_class": 3,
+        "n_class": 2,
         "n_feats": 8,
         "dropout": 0.1,
         "stride": 1,

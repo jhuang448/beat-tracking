@@ -62,7 +62,7 @@ def main(args):
         "n_cnn_layers": 2,
         "n_rnn_layers": 3,
         "rnn_dim": 25,
-        "n_class": 3,
+        "n_class": 2,
         "n_feats": 8,
         "dropout": 0.1,
         "stride": 1,
@@ -114,8 +114,8 @@ def main(args):
                                    **kwargs)
 
     optimizer = optim.Adam(model.parameters(), hparams['learning_rate'])
-    pos_weight = torch.Tensor([1., 1., 1.])
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight).to(device) # nonbeat:beat:downbeat
+    # pos_weight = torch.Tensor([1., 1., 1.])
+    criterion = nn.BCEWithLogitsLoss().to(device) # nonbeat:beat:downbeat
     # downbeat_flag = False
     # downbeat_epoch = -1
 
@@ -145,7 +145,7 @@ def main(args):
         #     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight).to(device) # update criterion
         #     downbeat_epoch += 1
 
-        lr = hparams['learning_rate'] / (((state["epochs"] // (30 * 1)) * 2) + 1)
+        lr = hparams['learning_rate'] / (((state["epochs"] // (20 * 1)) * 2) + 1)
         set_lr(optimizer, lr)
         writer.add_scalar("train/learning_rate", lr, state["epochs"])
 

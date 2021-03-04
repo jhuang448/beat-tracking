@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torchaudio
 
 n_fft = 2048
-n_class = 3
+n_class = 2
 
 # spectrogram = torchaudio.transforms.Spectrogram(n_fft=n_fft)
 mel_spectrogram = torchaudio.transforms.MelSpectrogram(sample_rate=44100, n_mels=128, n_fft=n_fft)
@@ -36,9 +36,9 @@ def data_processing(data):
 
         beats_frames = torch.zeros(size=(spec.shape[0],n_class))
         beats_pos = (beats // (n_fft//2)).astype(int) # beat class
-        beats_frames[beats_pos, 1] = 1
+        beats_frames[beats_pos, 0] = 1
         downbeats_pos = (downbeats // (n_fft//2)).astype(int) # downbeat class
-        beats_frames[downbeats_pos, 2] = 1
+        beats_frames[downbeats_pos, 1] = 1
 
         label = torch.Tensor(beats_frames)
         labels.append(label)
