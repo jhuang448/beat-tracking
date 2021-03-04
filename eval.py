@@ -32,8 +32,8 @@ model = BeatTrackingModel(
 )
 
 dbn = DBNBeatTrackingProcessor(
-    min_bpm=55,
-    max_bpm=215,
+    min_bpm=60,
+    max_bpm=240,
     transition_lambda=100,
     fps=(44100 // 1024),
     online=True)

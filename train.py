@@ -116,6 +116,8 @@ def main(args):
     optimizer = optim.Adam(model.parameters(), hparams['learning_rate'])
     pos_weight = torch.Tensor([1., 1., 1.])
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight).to(device) # nonbeat:beat:downbeat
+    # downbeat_flag = False
+    # downbeat_epoch = -1
 
     # Set up training state dict that will also be saved into checkpoints
     # Set up training state dict that will also be saved into checkpoints
@@ -135,10 +137,15 @@ def main(args):
     current = datetime.datetime.now()
     writer = SummaryWriter(os.path.join(args.log_dir + current.strftime("%m:%d:%H:%M")))
 
-    while state["worse_epochs"] < 10:
+    while state["worse_epochs"] < 10: # or downbeat_flag == True:
         print("Training one epoch from epoch " + str(state["epochs"]))
 
-        lr = hparams['learning_rate'] / (((state["epochs"] // (70 * 1)) * 2) + 1)
+        # if downbeat_flag == True: # increase the weight of the downbeat class
+        #     pos_weight = torch.Tensor([1., 1., 0.4 * downbeat_epoch]) # update weight
+        #     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight).to(device) # update criterion
+        #     downbeat_epoch += 1
+
+        lr = hparams['learning_rate'] / (((state["epochs"] // (30 * 1)) * 2) + 1)
         set_lr(optimizer, lr)
         writer.add_scalar("train/learning_rate", lr, state["epochs"])
 
@@ -167,6 +174,15 @@ def main(args):
         }, checkpoint_path)
 
         state["epochs"] += 1
+
+        # if state["worse_epochs"] == 10:
+        #     downbeat_flag = True
+        #     downbeat_epoch = 1
+        #     state["worse_epochs"] = 0 # do not stop here
+        #
+        # if downbeat_epoch == 11:
+        #     downbeat_flag = False
+        #     state["worse_epochs"] = 0
 
     writer.close()
 
