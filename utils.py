@@ -119,7 +119,7 @@ def validate(batch_size, model, criterion, dataloader, device):
             t = time.time()
 
             output = model(spectrograms).squeeze(2)  # (batch, time, n_class)
-            output = torch.sigmoid(output)
+            # output = torch.sigmoid(output)
 
             loss = criterion(output, labels)
 
@@ -138,15 +138,19 @@ def validate(batch_size, model, criterion, dataloader, device):
 
 def predict(args, model, test_data, device):
 
-    if not os.path.exists(args.pred_dir):
-        os.makedirs(args.pred_dir)
-
     if not os.path.exists('pics'):
         os.makedirs('pics')
 
     dbn = DBNBeatTrackingProcessor(
         min_bpm=60,
         max_bpm=240,
+        transition_lambda=100,
+        fps=(44100 // 1024),
+        online=True)
+
+    dbn_downbeat = DBNBeatTrackingProcessor(
+        min_bpm=15,
+        max_bpm=80,
         transition_lambda=100,
         fps=(44100 // 1024),
         online=True)
@@ -159,9 +163,12 @@ def predict(args, model, test_data, device):
                                              collate_fn=my_collate)
     model.eval()
     f_accum = 0.
+    f_accum_db = 0.
     with tqdm(total=len(test_data)) as pbar, torch.no_grad():
         for example_num, _data in enumerate(dataloader):
-            x, beats = _data
+            x, b = _data
+
+            beats, downbeats = b[0]
 
             x = move_data_to_device(x, device)
             x = x.squeeze(0)
@@ -180,17 +187,23 @@ def predict(args, model, test_data, device):
             # print(all_outputs.shape) # batch, length, classes
             _, _, num_classes = all_outputs.shape
 
-            song_pred = torch.sigmoid(all_outputs).data.numpy().reshape(-1, num_classes)
+            song_pred = all_outputs.reshape(-1, num_classes)
             # print(song_pred.shape) # total_length, num_classes
 
-            song_pred = song_pred[:total_length, 0]
+            beats_pred = torch.sigmoid(song_pred[:total_length, 1])
+            downbeats_pred = torch.sigmoid(song_pred[:total_length, 2])
             # print(song_pred.shape)  # total_length, num_classes
 
             dbn.reset()
-            predicted_beats = dbn.process_offline(song_pred)
+            predicted_beats = dbn.process_offline(beats_pred.data.numpy())
 
             scores = mir_eval.beat.evaluate(np.array(beats), predicted_beats)
             f_accum += scores['F-measure']
+
+            dbn_downbeat.reset()
+            predicted_downbeats = dbn.process_offline(downbeats_pred.data.numpy())
+            scores = mir_eval.beat.evaluate(np.array(downbeats), predicted_downbeats)
+            f_accum_db += scores['F-measure']
 
             # write
             # with open(os.path.join(args.pred_dir, audio_name + "_align.csv"), 'w') as f:
@@ -199,7 +212,7 @@ def predict(args, model, test_data, device):
 
             pbar.update(1)
 
-    return f_accum / len(test_data)
+    return f_accum / len(test_data), f_accum_db / len(test_data)
 
 def seed_torch(seed=0):
     # random.seed(seed)

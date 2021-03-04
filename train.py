@@ -36,7 +36,7 @@ def train(model, device, train_loader, criterion, optimizer, scheduler, epoch, i
             optimizer.zero_grad()
 
             output = model(spectrograms).squeeze(2)  # (batch, time, n_class)
-            output = torch.sigmoid(output)
+            # output = torch.sigmoid(output)
             # print(output.shape, labels.shape)
             loss = criterion(output, labels)
             loss.backward()
@@ -62,7 +62,7 @@ def main(args):
         "n_cnn_layers": 2,
         "n_rnn_layers": 3,
         "rnn_dim": 25,
-        "n_class": 1,
+        "n_class": 3,
         "n_feats": 8,
         "dropout": 0.1,
         "stride": 1,
@@ -114,7 +114,8 @@ def main(args):
                                    **kwargs)
 
     optimizer = optim.Adam(model.parameters(), hparams['learning_rate'])
-    criterion = nn.BCELoss().to(device)
+    pos_weight = torch.Tensor([1., 1., 1.])
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight).to(device) # nonbeat:beat:downbeat
 
     # Set up training state dict that will also be saved into checkpoints
     # Set up training state dict that will also be saved into checkpoints

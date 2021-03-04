@@ -217,8 +217,10 @@ class testDataset(Dataset):
 
         # find the beats within (start_target_pos, end_target_pos)
         beats_pos = self.hdf_dataset[str(song_idx)]["beats"][:, 0]
+        downbeat_mask = (self.hdf_dataset[str(song_idx)]["beats"][:, 1] == 1)
+        downbeats_pos = self.hdf_dataset[str(song_idx)]["beats"][downbeat_mask, 0]
 
-        return audio, beats_pos
+        return audio, (beats_pos, downbeats_pos)
 
     def __len__(self):
         return self.length

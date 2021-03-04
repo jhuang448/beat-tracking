@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torchaudio
 
 n_fft = 2048
+n_class = 3
 
 # spectrogram = torchaudio.transforms.Spectrogram(n_fft=n_fft)
 mel_spectrogram = torchaudio.transforms.MelSpectrogram(sample_rate=44100, n_mels=128, n_fft=n_fft)
@@ -11,29 +12,15 @@ mel_spectrogram = torchaudio.transforms.MelSpectrogram(sample_rate=44100, n_mels
 
 def train_audio_transforms(waveform):
     s = mel_spectrogram(waveform)
-    energy = torch.sum(torch.pow(s, 2), dim=0, keepdim=True)
 
     spec = mel_spectrogram(waveform).squeeze(0) # (n_mel, time)
-    # spec_pad = F.pad(spec, (1, 0), "constant", 0)
-    # delta_spec = spec_pad[:, 1:] - spec_pad[:, :-1]
-    #
-    # spec_target = torch.cat((spec, delta_spec), dim=0).transpose(0, 1)
 
     return spec.transpose(0, 1)
 
 def eval_audio_transforms(waveform):
-    eval_spec_target = []
-
-    # for i in range(waveform.shape[0]):
     w = waveform
-    # s = spectrogram(w)
 
     spec = mel_spectrogram(w).squeeze(0) # (n_mel, time)
-    # spec_pad = F.pad(spec, (1, 0), "constant", 0)
-    # delta_spec = spec_pad[:, 1:] - spec_pad[:, :-1]
-    # delta_spec[delta_spec < 0] = 0
-    #
-    # spec_target = torch.cat((spec, delta_spec), dim=0).transpose(0, 1)
 
     return spec.transpose(0, 1).unsqueeze(0)
 
@@ -47,11 +34,11 @@ def data_processing(data):
         spec = train_audio_transforms(waveform)
         spectrograms.append(spec)
 
-        beats_frames = torch.zeros(size=(spec.shape[0],))
+        beats_frames = torch.zeros(size=(spec.shape[0],n_class))
         beats_pos = (beats // (n_fft//2)).astype(int) # beat class
-        beats_frames[beats_pos] = 1
+        beats_frames[beats_pos, 1] = 1
         downbeats_pos = (downbeats // (n_fft//2)).astype(int) # downbeat class
-        # beats_frames[downbeats_pos] = 2
+        beats_frames[downbeats_pos, 2] = 2
 
         label = torch.Tensor(beats_frames)
         labels.append(label)

@@ -18,7 +18,7 @@ hparams = {
         "n_cnn_layers": 2,
         "n_rnn_layers": 3,
         "rnn_dim": 25,
-        "n_class": 1,
+        "n_class": 3,
         "n_feats": 8,
         "dropout": 0.1,
         "stride": 1,
@@ -31,8 +31,6 @@ model = BeatTrackingModel(
         hparams['n_class'], hparams['n_feats'], hparams['stride'], hparams['dropout'], hparams['input_sample']
 )
 
-state = utils.load_model(model, None, "checkpoints/dummy/checkpoint_1", False)
-
 dbn = DBNBeatTrackingProcessor(
     min_bpm=55,
     max_bpm=215,
@@ -40,9 +38,15 @@ dbn = DBNBeatTrackingProcessor(
     fps=(44100 // 1024),
     online=True)
 
+dbn_downbeat = DBNBeatTrackingProcessor(
+    min_bpm=15,
+    max_bpm=80,
+    transition_lambda=100,
+    fps=(44100 // 1024),
+    online=True)
+
 def beatTracker(inputFile):
-    beats = None
-    downbeats = None
+    state = utils.load_model(model, None, "checkpoints/dummy/checkpoint_1", False)
 
     y, _ = utils.load(inputFile, sr=44100, mono=True)
     x = torch.Tensor(y)
@@ -60,16 +64,20 @@ def beatTracker(inputFile):
     # print(all_outputs.shape)  # batch, length, classes
     _, _, num_classes = all_outputs.shape
 
-    song_pred = torch.sigmoid(all_outputs).data.numpy().reshape(-1, num_classes)
+    song_pred = all_outputs.data.numpy().reshape(-1, num_classes)
     # print(song_pred.shape) # total_length, num_classes
 
-    song_pred = song_pred[:total_length, 0]
+    beats_pred = song_pred[:total_length, 1]
+    downbeats_pred = song_pred[:total_length, 2]
     # print(song_pred.shape)  # total_length, num_classes
 
     dbn.reset()
-    predicted_beats = dbn.process_offline(song_pred)
+    predicted_beats = dbn.process_offline(beats_pred)
 
-    return predicted_beats, downbeats
+    dbn_downbeat.reset()
+    predicted_downbeats = dbn.process_offline(downbeats_pred)
+
+    return predicted_beats, predicted_downbeats
 
 def main(args):
 
@@ -81,6 +89,9 @@ def main(args):
         print("move model to gpu")
         model = utils.DataParallel(model)
         model.cuda()
+
+    if not os.path.exists(args.pred_dir):
+        os.makedirs(args.pred_dir)
 
     # print('model: ', model)
     print('parameter count: ', str(sum(p.numel() for p in model.parameters())))
