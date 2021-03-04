@@ -67,8 +67,8 @@ def beatTracker(inputFile):
     song_pred = all_outputs.data.numpy().reshape(-1, num_classes)
     # print(song_pred.shape) # total_length, num_classes
 
-    beats_pred = song_pred[:total_length, 1]
-    downbeats_pred = song_pred[:total_length, 2]
+    beats_pred = song_pred[:total_length, 0]
+    downbeats_pred = song_pred[:total_length, 1]
     # print(song_pred.shape)  # total_length, num_classes
 
     dbn.reset()

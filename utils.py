@@ -190,8 +190,8 @@ def predict(args, model, test_data, device):
             song_pred = all_outputs.reshape(-1, num_classes)
             # print(song_pred.shape) # total_length, num_classes
 
-            beats_pred = torch.sigmoid(song_pred[:total_length, 1])
-            downbeats_pred = torch.sigmoid(song_pred[:total_length, 2])
+            beats_pred = torch.sigmoid(song_pred[:total_length, 0])
+            downbeats_pred = torch.sigmoid(song_pred[:total_length, 1])
             # print(song_pred.shape)  # total_length, num_classes
 
             dbn.reset()
