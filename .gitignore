@@ -1,3 +1,5 @@
 .idea/
 checkpoints/
 logs/
+*.png
+

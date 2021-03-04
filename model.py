@@ -7,7 +7,10 @@ n_fft = 2048
 n_class = 2
 
 # spectrogram = torchaudio.transforms.Spectrogram(n_fft=n_fft)
-mel_spectrogram = torchaudio.transforms.MelSpectrogram(sample_rate=44100, n_mels=128, n_fft=n_fft)
+mel_spectrogram = nn.Sequential(
+    torchaudio.transforms.MelSpectrogram(sample_rate=44100, n_mels=128, n_fft=n_fft),
+    torchaudio.transforms.AmplitudeToDB()
+)
 # freq_mask = torchaudio.transforms.FrequencyMasking(freq_mask_param=15)
 
 def train_audio_transforms(waveform):

@@ -114,8 +114,8 @@ def main(args):
                                    **kwargs)
 
     optimizer = optim.Adam(model.parameters(), hparams['learning_rate'])
-    pos_weight = torch.Tensor([1., 3.5])
-    criterion = nn.BCEWithLogitsLoss(pos_weight).to(device) # nonbeat:beat:downbeat
+    # pos_weight = torch.Tensor([1., 3.5])
+    criterion = nn.BCEWithLogitsLoss().to(device) # nonbeat:beat:downbeat
     # downbeat_flag = False
     # downbeat_epoch = -1
 
