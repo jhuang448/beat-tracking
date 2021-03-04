@@ -47,6 +47,10 @@ def my_collate(batch):
     beats = list(beats)
     return audio, beats
 
+def set_lr(optim, lr):
+    for g in optim.param_groups:
+        g['lr'] = lr
+
 def move_data_to_device(x, device):
     if 'float' in str(x.dtype):
         x = torch.Tensor(x)
@@ -142,7 +146,7 @@ def predict(args, model, test_data, device):
 
     dbn = DBNBeatTrackingProcessor(
         min_bpm=60,
-        max_bpm=180,
+        max_bpm=240,
         transition_lambda=100,
         fps=(44100 // 1024),
         online=True)
@@ -169,17 +173,15 @@ def predict(args, model, test_data, device):
             # Predict
             all_outputs = model(x)
 
-            batch_num, _, output_length = all_outputs.shape
+            # batch_num, _, output_length = all_outputs.shape
 
             total_length = all_outputs.shape[1]
 
-            print(all_outputs.shape) # batch, length, classes
+            # print(all_outputs.shape) # batch, length, classes
             _, _, num_classes = all_outputs.shape
 
             song_pred = torch.sigmoid(all_outputs).data.numpy().reshape(-1, num_classes)
             # print(song_pred.shape) # total_length, num_classes
-
-            resolution = 1024 / args.sr
 
             song_pred = song_pred[:total_length, 0]
             # print(song_pred.shape)  # total_length, num_classes

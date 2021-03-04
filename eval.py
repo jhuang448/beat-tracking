@@ -31,7 +31,7 @@ model = BeatTrackingModel(
         hparams['n_class'], hparams['n_feats'], hparams['stride'], hparams['dropout'], hparams['input_sample']
 )
 
-state = utils.load_model(model, None, "checkpoints/dummy/checkpoint_4", False)
+state = utils.load_model(model, None, "checkpoints/dummy/checkpoint_1", False)
 
 dbn = DBNBeatTrackingProcessor(
     min_bpm=55,
@@ -44,34 +44,32 @@ def beatTracker(inputFile):
     beats = None
     downbeats = None
 
-    y, _ = librosa.load(inputFile, sr=44100, mono=True)
+    y, _ = utils.load(inputFile, sr=44100, mono=True)
+    x = torch.Tensor(y)
 
-    x = eval_audio_transforms(y)
+    x = eval_audio_transforms(x)
     x = nn.utils.rnn.pad_sequence(x, batch_first=True).unsqueeze(1).transpose(2, 3)
 
     # Predict
     all_outputs = model(x)
 
-    batch_num, _, output_length = all_outputs.shape
+    # batch_num, _, output_length = all_outputs.shape
 
     total_length = all_outputs.shape[1]
 
     # print(all_outputs.shape)  # batch, length, classes
     _, _, num_classes = all_outputs.shape
 
-    song_pred = torch.softmax(all_outputs, dim=2).data.numpy().view(-1)
+    song_pred = torch.sigmoid(all_outputs).data.numpy().reshape(-1, num_classes)
+    # print(song_pred.shape) # total_length, num_classes
+
+    song_pred = song_pred[:total_length, 0]
     # print(song_pred.shape)  # total_length, num_classes
 
-    resolution = 1024 / 44100
-
-    beat_pred = song_pred[:total_length, 1]
-
     dbn.reset()
-    predicted_beats = dbn.process_offline(beat_pred)
+    predicted_beats = dbn.process_offline(song_pred)
 
-    downbeat_pred = song_pred[:total_length, 2]
-
-    return beats, downbeats
+    return predicted_beats, downbeats
 
 def main(args):
 

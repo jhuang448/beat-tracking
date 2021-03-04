@@ -10,7 +10,7 @@ import time
 from tqdm import tqdm
 
 from data import get_ballroom_folds, BallroomDataset
-from utils import validate, seed_torch
+from utils import validate, seed_torch, set_lr
 from utils import worker_init_fn, load_model
 
 from model import BeatTrackingModel, data_processing
@@ -136,6 +136,11 @@ def main(args):
 
     while state["worse_epochs"] < 10:
         print("Training one epoch from epoch " + str(state["epochs"]))
+
+        lr = hparams['learning_rate'] / (((state["epochs"] // (70 * 1)) * 2) + 1)
+        set_lr(optimizer, lr)
+        writer.add_scalar("train/learning_rate", lr, state["epochs"])
+
         # train
         train_loss = train(model, device, train_loader, criterion, optimizer, None, state["epochs"], None, args.batch_size)
         writer.add_scalar("train/epoch_loss", train_loss, state["epochs"])

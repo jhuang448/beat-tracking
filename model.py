@@ -14,13 +14,12 @@ def train_audio_transforms(waveform):
     energy = torch.sum(torch.pow(s, 2), dim=0, keepdim=True)
 
     spec = mel_spectrogram(waveform).squeeze(0) # (n_mel, time)
-    spec_pad = F.pad(spec, (1, 0), "constant", 0)
-    delta_spec = spec_pad[:, 1:] - spec_pad[:, :-1]
-    # delta_spec[delta_spec<0] = 0
+    # spec_pad = F.pad(spec, (1, 0), "constant", 0)
+    # delta_spec = spec_pad[:, 1:] - spec_pad[:, :-1]
+    #
+    # spec_target = torch.cat((spec, delta_spec), dim=0).transpose(0, 1)
 
-    spec_target = torch.cat((spec, delta_spec), dim=0).transpose(0, 1)
-
-    return spec_target
+    return spec.transpose(0, 1)
 
 def eval_audio_transforms(waveform):
     eval_spec_target = []
@@ -30,13 +29,13 @@ def eval_audio_transforms(waveform):
     # s = spectrogram(w)
 
     spec = mel_spectrogram(w).squeeze(0) # (n_mel, time)
-    spec_pad = F.pad(spec, (1, 0), "constant", 0)
-    delta_spec = spec_pad[:, 1:] - spec_pad[:, :-1]
-    delta_spec[delta_spec < 0] = 0
+    # spec_pad = F.pad(spec, (1, 0), "constant", 0)
+    # delta_spec = spec_pad[:, 1:] - spec_pad[:, :-1]
+    # delta_spec[delta_spec < 0] = 0
+    #
+    # spec_target = torch.cat((spec, delta_spec), dim=0).transpose(0, 1)
 
-    spec_target = torch.cat((spec, delta_spec), dim=0).transpose(0, 1)
-
-    return spec_target.unsqueeze(0)
+    return spec.transpose(0, 1).unsqueeze(0)
 
 def data_processing(data):
     spectrograms = []
@@ -85,18 +84,11 @@ class BeatTrackingModel(nn.Module):
     def __init__(self, n_cnn_layers, n_rnn_layers, rnn_dim, n_class, n_feats, stride=1, dropout=0.1, input_sample=220500):
         super(BeatTrackingModel, self).__init__()
 
-        # n residual cnn layers with filter size of 32
-        # self.cnn_layers = nn.Sequential(
-        #     nn.Conv2d(1, n_feats, 3, stride=stride, padding=3 // 2),
-        #     nn.MaxPool2d(kernel_size=(2, 2)),
-        #     nn.Conv2d(n_feats, n_feats, 3, stride=stride, padding=3 // 2),
-        #     nn.MaxPool2d(kernel_size=(2, 2))
-        # )
-
-        # self.linear = nn.Linear(2048, rnn_dim)
+        self.cnn = nn.Conv2d(1, n_feats, (1,3), stride=1, padding=(0,1))
+        self.fully_connected = nn.Linear(n_feats * 128, rnn_dim)
 
         self.bilstm_layers = nn.Sequential(*[
-            BidirectionalLSTM(rnn_dim=256 if i == 0 else rnn_dim * 2,
+            BidirectionalLSTM(rnn_dim=rnn_dim if i == 0 else rnn_dim * 2,
                              hidden_size=rnn_dim, dropout=dropout, batch_first=i == 0)
             for i in range(n_rnn_layers)
         ])
@@ -106,12 +98,16 @@ class BeatTrackingModel(nn.Module):
 
     def forward(self, x):
         # x = self.cnn_layers(x)
+        # print(x.shape)
+        x = F.relu(self.cnn(x))
+        # print(x.shape)
 
         sizes = x.size()
         x = x.view(sizes[0], sizes[1] * sizes[2], sizes[3])  # (batch, feature, time)
         x = x.transpose(1, 2)  # (batch, time, feature)
 
-        # x = self.linear(x)
+        # print(x.shape)
+        x = F.relu(self.fully_connected(x))
 
         x = self.bilstm_layers(x)
 
