@@ -5,6 +5,7 @@ import torch.nn as nn
 import numpy as np
 import librosa
 from madmom.features import DBNBeatTrackingProcessor
+from madmom.features import DBNDownBeatTrackingProcessor, RNNDownBeatProcessor
 import time
 import warnings
 from tqdm import tqdm
@@ -173,26 +174,18 @@ def predict(args, model, test_data, device):
             x = move_data_to_device(x, device)
             x = x.squeeze(0)
 
-            # x = x.squeeze(1)
             x = eval_audio_transforms(x)
             x = nn.utils.rnn.pad_sequence(x, batch_first=True).unsqueeze(1).transpose(2, 3)
 
             # Predict
             all_outputs = model(x)
 
-            # batch_num, _, output_length = all_outputs.shape
-
-            total_length = all_outputs.shape[1]
-
-            # print(all_outputs.shape) # batch, length, classes
-            _, _, num_classes = all_outputs.shape
+            _, total_length, num_classes = all_outputs.shape # batch, length, classes
 
             song_pred = all_outputs.reshape(-1, num_classes)
-            # print(song_pred.shape) # total_length, num_classes
 
             beats_pred = torch.sigmoid(song_pred[:total_length, 0])
             downbeats_pred = torch.sigmoid(song_pred[:total_length, 1])
-            # print(song_pred.shape)  # total_length, num_classes
 
             dbn.reset()
             predicted_beats = dbn.process_offline(beats_pred.data.numpy())
@@ -201,18 +194,50 @@ def predict(args, model, test_data, device):
             f_accum += scores['F-measure']
 
             dbn_downbeat.reset()
-            predicted_downbeats = dbn.process_offline(downbeats_pred.data.numpy())
+            predicted_downbeats = dbn_downbeat.process_offline(downbeats_pred.data.numpy())
             scores = mir_eval.beat.evaluate(np.array(downbeats), predicted_downbeats)
             f_accum_db += scores['F-measure']
-
-            # write
-            # with open(os.path.join(args.pred_dir, audio_name + "_align.csv"), 'w') as f:
-            #     for word in word_align:
-            #         f.write("{},{}\n".format(word[0] * resolution, word[1] * resolution))
 
             pbar.update(1)
 
     return f_accum / len(test_data), f_accum_db / len(test_data)
+
+def predict_madmom(audio_dir, annot_dir, split_file):
+
+    db_proc = DBNDownBeatTrackingProcessor(beats_per_bar=[2, 3, 4], fps=100)
+
+    with open(split_file, "rb") as f:
+        data_split = np.load(f, allow_pickle=True).item()
+
+    f_accum = 0.
+    f_accum_db = 0.
+    with tqdm(total=len(data_split["test"])) as pbar:
+        for audiofile in data_split["test"]:
+
+            # fetch annotation
+            audio_basename = os.path.basename(audiofile)
+            beat_info = load_annot(os.path.join(annot_dir, audio_basename[:-4] + '.beats'))
+            beats = beat_info[:, 0]
+            mask = (beat_info[:, 1] == 1)
+            downbeats = beat_info[mask, 0]
+
+            # madmom prediction
+            act = RNNDownBeatProcessor()(os.path.join(audio_dir, audiofile))
+            beat_info = db_proc(act)
+
+            predicted_beats = beat_info[:, 0]
+            mask = (beat_info[:, 1] == 1)
+            predicted_downbeats = beat_info[mask, 0]
+
+            scores = mir_eval.beat.evaluate(np.array(beats), predicted_beats)
+            f_accum += scores['F-measure']
+
+            scores = mir_eval.beat.evaluate(np.array(downbeats), predicted_downbeats)
+            f_accum_db += scores['F-measure']
+
+            pbar.update(1)
+
+    return f_accum / len(data_split["test"]), f_accum_db / len(data_split["test"])
 
 def seed_torch(seed=0):
     # random.seed(seed)

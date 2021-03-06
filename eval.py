@@ -31,22 +31,23 @@ model = BeatTrackingModel(
         hparams['n_class'], hparams['n_feats'], hparams['stride'], hparams['dropout'], hparams['input_sample']
 )
 
-dbn = DBNBeatTrackingProcessor(
-    min_bpm=60,
-    max_bpm=240,
-    transition_lambda=100,
-    fps=(44100 // 1024),
-    online=True)
-
-dbn_downbeat = DBNBeatTrackingProcessor(
-    min_bpm=15,
-    max_bpm=80,
-    transition_lambda=100,
-    fps=(44100 // 1024),
-    online=True)
-
 def beatTracker(inputFile):
-    state = utils.load_model(model, None, "checkpoints/dummy/checkpoint_1", False)
+
+    dbn = DBNBeatTrackingProcessor(
+        min_bpm=60,
+        max_bpm=240,
+        transition_lambda=100,
+        fps=(44100 // 1024),
+        online=True)
+
+    dbn_downbeat = DBNBeatTrackingProcessor(
+        min_bpm=15,
+        max_bpm=80,
+        transition_lambda=100,
+        fps=(44100 // 1024),
+        online=True)
+
+    state = utils.load_model(model, None, "checkpoints/master/lr-03/spec_aug/checkpoint_17", False)
 
     y, _ = utils.load(inputFile, sr=44100, mono=True)
     x = torch.Tensor(y)
@@ -64,18 +65,18 @@ def beatTracker(inputFile):
     # print(all_outputs.shape)  # batch, length, classes
     _, _, num_classes = all_outputs.shape
 
-    song_pred = all_outputs.data.numpy().reshape(-1, num_classes)
+    song_pred = all_outputs.reshape(-1, num_classes)
     # print(song_pred.shape) # total_length, num_classes
 
-    beats_pred = song_pred[:total_length, 0]
-    downbeats_pred = song_pred[:total_length, 1]
+    beats_pred = torch.sigmoid(song_pred[:total_length, 0])
+    downbeats_pred = torch.sigmoid(song_pred[:total_length, 1])
     # print(song_pred.shape)  # total_length, num_classes
 
     dbn.reset()
-    predicted_beats = dbn.process_offline(beats_pred)
+    predicted_beats = dbn.process_offline(beats_pred.data.numpy())
 
     dbn_downbeat.reset()
-    predicted_downbeats = dbn.process_offline(downbeats_pred)
+    predicted_downbeats = dbn_downbeat.process_offline(downbeats_pred.data.numpy())
 
     return predicted_beats, predicted_downbeats
 
@@ -90,9 +91,6 @@ def main(args):
         model = utils.DataParallel(model)
         model.cuda()
 
-    if not os.path.exists(args.pred_dir):
-        os.makedirs(args.pred_dir)
-
     # print('model: ', model)
     print('parameter count: ', str(sum(p.numel() for p in model.parameters())))
 
@@ -106,8 +104,10 @@ def main(args):
                                partition="test", audio_dir=audio_dir, annot_dir=annot_dir, in_memory=False)
 
     results = utils.predict(args, model, test_data, device)
+    print("Averaged F-measure (beat, downbeat):", results)
 
-    print("Averaged F-measure:", results)
+    # results = utils.predict_madmom(audio_dir, annot_dir, "data_split.npz")
+    # print("Averaged F-measure (madmom):", results)
 
 
 if __name__ == '__main__':
@@ -117,24 +117,12 @@ if __name__ == '__main__':
                         help='Use CUDA (default: False)')
     parser.add_argument('--num_workers', type=int, default=0,
                         help='Number of data loader worker threads (default: 1)')
-    parser.add_argument('--features', type=int, default=24,
-                        help='Number of feature channels per layer')
-    parser.add_argument('--audio_dir', type=str, default="/import/c4dm-05/jh008/jamendolyrics/",
-                        help='Dataset path')
-    parser.add_argument('--dataset', type=str, default="jamendo",
-                        help='Dataset name')
-    parser.add_argument('--hdf_dir', type=str, default="/import/c4dm-datasets/sepa_DALI/hdf/sepa=True/",
-                        help='Dataset path')
-    parser.add_argument('--pred_dir', type=str, required=True,
-                        help='prediction path')
     parser.add_argument('--load_model', type=str, required=True,
                         help='Reload a previously trained model (whole task model)')
     parser.add_argument('--batch_size', type=int, default=1,
                         help="Batch size")
     parser.add_argument('--sr', type=int, default=44100,
                         help="Sampling rate")
-    parser.add_argument('--input_sample', type=int, default=110250,
-                        help="Input samples")
 
     args = parser.parse_args()
 
