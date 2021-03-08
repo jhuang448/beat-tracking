@@ -5,7 +5,7 @@ A Conv-biLSTM trained on the ballroom dataset.
 
 ### Dependencies
 ```
-pip install -r requirements.txt
+  pip install -r requirements.txt
 ```
 
 ### Train
@@ -27,4 +27,11 @@ Change the __audio_dir__ and __annot_dir__ in train.py and eval.py to the audio 
 from eval import beatTracker
 beats, downbeats = beatTracker(inputFile)
 ```
-Please refer to __example_and_figures.ipynb__ or detailed examples.
+Please refer to __example_and_figures.ipynb__ for detailed examples.
+
+### References
+[1] Sebastian Böck, Florian Krebs, and Gerhard Widmer.Joint beat and downbeat tracking with recurrent neuralnetworks. InISMIR, pages 255–261. New York City,2016.
+
+[2] Florian Krebs, Sebastian Böck, Matthias Dorfer, andGerhard Widmer. Downbeat tracking using beat syn-chronous features with recurrent neural networks. InISMIR, pages 129–135, 2016.
+
+[3] Sebastian  Böck  and  Markus  Schedl.  Enhanced  beattracking with context-aware neural networks. InProc.Int. Conf. Digital Audio Effects, pages 135–139, 2011.
