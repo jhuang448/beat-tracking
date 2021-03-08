@@ -1,51 +1,33 @@
-import librosa
-import os, argparse
-from utils import predict
+import argparse
 
 import torch
 import torch.nn as nn
-import torch.utils.data as data
-from madmom.features import DBNBeatTrackingProcessor
+from madmom.features import DBNDownBeatTrackingProcessor
 
 from data import testDataset
-from model import BeatTrackingModel, data_processing, eval_audio_transforms
+from model import BeatTrackingModel, eval_audio_transforms
 import utils
 
 audio_dir = "/import/c4dm-datasets/ballroom/BallroomData/"
 annot_dir = "/import/c4dm-datasets/ballroom/jku-beat-annotations/"
 
 hparams = {
-        "n_cnn_layers": 2,
         "n_rnn_layers": 3,
         "rnn_dim": 25,
         "n_class": 2,
         "n_feats": 8,
         "dropout": 0.1,
-        "stride": 1,
-        "input_sample": 220500,
         "batch_size": 1
 }
 
 model = BeatTrackingModel(
-        hparams['n_cnn_layers'], hparams['n_rnn_layers'], hparams['rnn_dim'],
-        hparams['n_class'], hparams['n_feats'], hparams['stride'], hparams['dropout'], hparams['input_sample']
+        hparams['n_rnn_layers'], hparams['rnn_dim'],
+        hparams['n_class'], hparams['n_feats'], hparams['dropout']
 )
 
 def beatTracker(inputFile):
 
-    dbn = DBNBeatTrackingProcessor(
-        min_bpm=60,
-        max_bpm=240,
-        transition_lambda=100,
-        fps=(44100 // 1024),
-        online=True)
-
-    dbn_downbeat = DBNBeatTrackingProcessor(
-        min_bpm=15,
-        max_bpm=80,
-        transition_lambda=100,
-        fps=(44100 // 1024),
-        online=True)
+    dbn_downbeat = DBNDownBeatTrackingProcessor(beats_per_bar=[2, 3, 4], fps=(44100 // 1024))
 
     state = utils.load_model(model, None, "checkpoints/checkpoint_best", False)
 
@@ -58,25 +40,16 @@ def beatTracker(inputFile):
     # Predict
     all_outputs = model(x)
 
-    # batch_num, _, output_length = all_outputs.shape
-
-    total_length = all_outputs.shape[1]
-
-    # print(all_outputs.shape)  # batch, length, classes
     _, _, num_classes = all_outputs.shape
 
     song_pred = all_outputs.reshape(-1, num_classes)
-    # print(song_pred.shape) # total_length, num_classes
+    song_pred = torch.sigmoid(song_pred).data.numpy()
 
-    beats_pred = torch.sigmoid(song_pred[:total_length, 0])
-    downbeats_pred = torch.sigmoid(song_pred[:total_length, 1])
-    # print(song_pred.shape)  # total_length, num_classes
-
-    dbn.reset()
-    predicted_beats = dbn.process_offline(beats_pred.data.numpy())
-
-    dbn_downbeat.reset()
-    predicted_downbeats = dbn_downbeat.process_offline(downbeats_pred.data.numpy())
+    # dbn decoding
+    beat_info = dbn_downbeat(song_pred)
+    predicted_beats = beat_info[:, 0]
+    mask = (beat_info[:, 1] == 1)
+    predicted_downbeats = beat_info[mask, 0]
 
     return predicted_beats, predicted_downbeats
 
@@ -91,7 +64,6 @@ def main(args):
         model = utils.DataParallel(model)
         model.cuda()
 
-    # print('model: ', model)
     print('parameter count: ', str(sum(p.numel() for p in model.parameters())))
 
     print("Loading full model from checkpoint " + str(args.load_model))
@@ -99,15 +71,15 @@ def main(args):
     state = utils.load_model(model, None, args.load_model, args.cuda)
 
     data_split = {"test": []}  # h5 files already saved
-    shapes = {"output_frames": hparams['input_sample']}
-    test_data = testDataset(sr=44100, hdf_dir="./hdf/", data_split=data_split,
+    test_data = testDataset(sr=args.sr, hdf_dir="./hdf/", data_split=data_split,
                                partition="test", audio_dir=audio_dir, annot_dir=annot_dir, in_memory=False)
 
     results = utils.predict(args, model, test_data, device)
     print("Averaged F-measure (beat, downbeat):", results[0], results[1])
 
-    print("Style-wise F-measures (beat, downbeat)", results[2], results[3])
+    # print("Style-wise F-measures (beat, downbeat)", results[2], results[3])
 
+    # madmom evaluation
     # results = utils.predict_madmom(audio_dir, annot_dir, "data_split.npz")
     # print("Averaged F-measure (madmom):", results)
 

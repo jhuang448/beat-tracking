@@ -36,8 +36,6 @@ def get_ballroom_folds(audio_dir):
 
     return {"train": train_list_all, "val": val_list_all, "test": test_list_all}
 
-
-
 class BallroomDataset(Dataset):
     def __init__(self, sr, shapes, hdf_dir, data_split, partition, audio_dir, annot_dir, in_memory=False):
         super(BallroomDataset, self).__init__()
@@ -47,7 +45,7 @@ class BallroomDataset(Dataset):
 
         self.sr = sr
         self.shapes = shapes
-        self.hop = self.sr # (shapes["output_frames"] // 2)
+        self.hop = (shapes["output_frames"] // 2)
         self.in_memory = in_memory
 
         self.audio_list = data_split[partition]
@@ -91,10 +89,6 @@ class BallroomDataset(Dataset):
                 raise ValueError(
                     "Tried to load existing HDF file, but sampling rate is not as expected. Did you load an out-dated HDF file?")
 
-        # HDF FILE READY
-
-        # SET SAMPLING POSITIONS
-
         # Go through HDF and collect lengths of all audio files
         with h5py.File(self.hdf_file, "r") as f:
             # length of song
@@ -114,69 +108,57 @@ class BallroomDataset(Dataset):
             driver = "core" if self.in_memory else None  # Load HDF5 fully into memory if desired
             self.hdf_dataset = h5py.File(self.hdf_file, 'r', driver=driver)
 
-        while True:
-            # Loop until it finds a valid sample
+        # Find out which slice of targets we want to read
+        song_idx = self.start_pos.bisect_right(index)
+        if song_idx > 0:
+            index = index - self.start_pos[song_idx - 1]
 
-            # Find out which slice of targets we want to read
-            song_idx = self.start_pos.bisect_right(index)
-            if song_idx > 0:
-                index = index - self.start_pos[song_idx - 1]
+        # Check length of audio signal
+        audio_length = self.hdf_dataset[str(song_idx)].attrs["input_length"]
+        annot_num = self.hdf_dataset[str(song_idx)].attrs["annot_num"]
 
-            # Check length of audio signal
-            audio_length = self.hdf_dataset[str(song_idx)].attrs["input_length"]
-            annot_num = self.hdf_dataset[str(song_idx)].attrs["annot_num"]
+        # Determine position where to start targets
+        start_target_pos = index * self.hop
+        end_target_pos = start_target_pos + self.shapes["output_frames"]
 
-            # Determine position where to start targets
-            start_target_pos = index * self.hop
-            end_target_pos = start_target_pos + self.shapes["output_frames"]
+        # READ INPUTS
+        start_pos = start_target_pos
+        end_pos = end_target_pos
+        if end_pos > audio_length:
+            # Pad manually since audio signal was too short
+            pad_back = end_pos - audio_length
+            end_pos = audio_length
+        else:
+            pad_back = 0
 
-            # READ INPUTS
-            start_pos = start_target_pos
-            end_pos = end_target_pos
-            if end_pos > audio_length:
-                # Pad manually since audio signal was too short
-                pad_back = end_pos - audio_length
-                end_pos = audio_length
-            else:
-                pad_back = 0
+        # read audio and zero padding
+        audio = self.hdf_dataset[str(song_idx)]["inputs"][0, start_pos:end_pos].astype(np.float32)
+        if pad_back > 0:
+            audio = np.pad(audio, (0, pad_back), mode="constant", constant_values=0.0)
 
-            # read audio and zero padding
-            audio = self.hdf_dataset[str(song_idx)]["inputs"][0, start_pos:end_pos].astype(np.float32)
-            if pad_back > 0:
-                audio = np.pad(audio, (0, pad_back), mode="constant", constant_values=0.0)
+        # find the beats within (start_target_pos, end_target_pos)
+        beats_pos = self.hdf_dataset[str(song_idx)]["beats"][:, 0]
+        try:
+            first_beat_to_include = next(x for x, val in enumerate(list(beats_pos))
+                                         if val > start_target_pos / self.sr)
+        except StopIteration:
+            first_beat_to_include = np.Inf
 
-            # find the beats within (start_target_pos, end_target_pos)
-            beats_pos = self.hdf_dataset[str(song_idx)]["beats"][:, 0]
-            try:
-                first_beat_to_include = next(x for x, val in enumerate(list(beats_pos))
-                                             if val > start_target_pos / self.sr)
-            except StopIteration:
-                first_beat_to_include = np.Inf
+        try:
+            last_beat_to_include = annot_num - 1 - next(
+                x for x, val in enumerate(reversed(list(beats_pos)))
+                if val < end_target_pos / self.sr)
+        except StopIteration:
+            last_beat_to_include = -np.Inf
 
-            try:
-                last_beat_to_include = annot_num - 1 - next(
-                    x for x, val in enumerate(reversed(list(beats_pos)))
-                    if val < end_target_pos / self.sr)
-            except StopIteration:
-                last_beat_to_include = -np.Inf
+        beats = np.array([])
+        downbeats = np.array([])
 
-            beats = np.array([])
-            downbeats = np.array([])
-            if first_beat_to_include - 1 == last_beat_to_include + 1:  # the word covers the whole window
-                # invalid sample, skip
-                targets = None
-                index = np.random.randint(self.length)
-                continue
-            if first_beat_to_include <= last_beat_to_include:  # the window covers word[first:last+1]
-                beats_info = self.hdf_dataset[str(song_idx)]["beats"][first_beat_to_include:last_beat_to_include + 1, :]
-                beats = beats_info[:, 0] * self.sr - start_pos
-                downbeat_mask = (beats_info[:,1]==1)
-                downbeats = beats_info[downbeat_mask, 0] * self.sr - start_pos
-
-            break
-
-        # write_wav("{}_{}_after.wav".format(str(song_idx), str(index)), audio, self.sr)
-        # print(targets, seq)
+        if first_beat_to_include <= last_beat_to_include:
+            beats_info = self.hdf_dataset[str(song_idx)]["beats"][first_beat_to_include:last_beat_to_include + 1, :]
+            beats = beats_info[:, 0] * self.sr - start_pos
+            downbeat_mask = (beats_info[:,1]==1)
+            downbeats = beats_info[downbeat_mask, 0] * self.sr - start_pos
 
         return audio, (beats, downbeats)
 
@@ -225,11 +207,3 @@ class testDataset(Dataset):
 
     def __len__(self):
         return self.length
-
-# audio_dir = "/import/c4dm-datasets/ballroom/BallroomData/"
-# annot_dir = "/import/c4dm-datasets/ballroom/jku-beat-annotations/"
-#
-# shapes = {"output_frames": 220500}
-#
-# dummy = BallroomDataset(sr=44100, shapes=shapes, hdf_dir="./hdf/", data_split={"dummy": ["ChaChaCha/Media-103401.wav"]},
-#                         partition="dummy", audio_dir=audio_dir, annot_dir=annot_dir, in_memory=False)

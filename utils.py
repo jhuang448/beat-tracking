@@ -39,7 +39,7 @@ def load_annot(beat_annot_file):
 
     return np.array(beats)
 
-def worker_init_fn(worker_id): # This is apparently needed to ensure workers have different random seeds and draw different examples!
+def worker_init_fn(worker_id):
     np.random.seed(np.random.get_state()[1][0] + worker_id)
 
 def my_collate(batch):
@@ -64,13 +64,13 @@ def move_data_to_device(x, device):
 
 def save_model(model, optimizer, state, path):
     if isinstance(model, torch.nn.DataParallel):
-        model = model.module  # save state dict of wrapped module
+        model = model.module
     if len(os.path.dirname(path)) > 0 and not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
     torch.save({
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-        'state': state,  # state of training loop (was 'step')
+        'state': state,
     }, path)
 
 def load_model(model, optimizer, path, cuda):
@@ -120,7 +120,6 @@ def validate(batch_size, model, criterion, dataloader, device):
             t = time.time()
 
             output = model(spectrograms).squeeze(2)  # (batch, time, n_class)
-            # output = torch.sigmoid(output)
 
             loss = criterion(output, labels)
 
@@ -138,20 +137,6 @@ def validate(batch_size, model, criterion, dataloader, device):
     return total_loss / data_len
 
 def predict(args, model, test_data, device):
-
-    # dbn = DBNBeatTrackingProcessor(
-    #     min_bpm=60,
-    #     max_bpm=240,
-    #     transition_lambda=100,
-    #     fps=(44100 // 1024),
-    #     online=True)
-    #
-    # dbn_downbeat = DBNBeatTrackingProcessor(
-    #     min_bpm=15,
-    #     max_bpm=80,
-    #     transition_lambda=100,
-    #     fps=(44100 // 1024),
-    #     online=True)
 
     dbn_downbeat = DBNDownBeatTrackingProcessor(beats_per_bar=[2, 3, 4], fps=(44100 // 1024))
 
@@ -182,28 +167,20 @@ def predict(args, model, test_data, device):
             # Predict
             all_outputs = model(x)
 
-            _, total_length, num_classes = all_outputs.shape # batch, length, classes
+            _, total_length, num_classes = all_outputs.shape  # batch, length, classes
 
             song_pred = all_outputs.reshape(-1, num_classes)
-
-            beats_pred = torch.sigmoid(song_pred[:total_length, 0])
-            downbeats_pred = torch.sigmoid(song_pred[:total_length, 1])
-
-            # dbn.reset()
-            # predicted_beats = dbn.process_offline(beats_pred.data.numpy())
 
             song_pred = torch.sigmoid(song_pred).data.numpy()
             beat_info = dbn_downbeat(song_pred)
             predicted_beats = beat_info[:, 0]
-            mask = (beat_info[:,1]==1)
+            mask = (beat_info[:, 1] == 1)
             predicted_downbeats = beat_info[mask, 0]
 
             scores = mir_eval.beat.evaluate(np.array(beats), predicted_beats)
             f_accum += scores['F-measure']
             f_style_accum[style] = f_style_accum.get(style, []) + [scores['F-measure']]
 
-            # dbn_downbeat.reset()
-            # predicted_downbeats = dbn_downbeat.process_offline(downbeats_pred.data.numpy())
             scores = mir_eval.beat.evaluate(np.array(downbeats), predicted_downbeats)
             f_accum_db += scores['F-measure']
             f_style_accum_db[style] = f_style_accum_db.get(style, []) + [scores['F-measure']]

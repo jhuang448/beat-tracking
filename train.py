@@ -20,7 +20,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 audio_dir = "/import/c4dm-datasets/ballroom/BallroomData/"
 annot_dir = "/import/c4dm-datasets/ballroom/jku-beat-annotations/"
 
-def train(model, device, train_loader, criterion, optimizer, scheduler, epoch, iter_meter, batch_size):
+def train(model, device, train_loader, criterion, optimizer, batch_size):
     avg_time = 0.
     model.train()
     data_len = len(train_loader.dataset) // batch_size
@@ -36,8 +36,7 @@ def train(model, device, train_loader, criterion, optimizer, scheduler, epoch, i
             optimizer.zero_grad()
 
             output = model(spectrograms).squeeze(2)  # (batch, time, n_class)
-            # output = torch.sigmoid(output)
-            # print(output.shape, labels.shape)
+
             loss = criterion(output, labels)
             loss.backward()
 
@@ -59,13 +58,11 @@ def train(model, device, train_loader, criterion, optimizer, scheduler, epoch, i
 
 def main(args):
     hparams = {
-        "n_cnn_layers": 2,
         "n_rnn_layers": 3,
         "rnn_dim": 25,
         "n_class": 2,
         "n_feats": 8,
         "dropout": 0.1,
-        "stride": 1,
         "learning_rate": args.lr,
         "input_sample": args.input_sample,
         "batch_size": args.batch_size
@@ -82,22 +79,22 @@ def main(args):
         os.makedirs(args.log_dir)
 
     model = BeatTrackingModel(
-        hparams['n_cnn_layers'], hparams['n_rnn_layers'], hparams['rnn_dim'],
-        hparams['n_class'], hparams['n_feats'], hparams['stride'], hparams['dropout'], hparams['input_sample']
+        hparams['n_rnn_layers'], hparams['rnn_dim'],
+        hparams['n_class'], hparams['n_feats'], hparams['dropout']
     ).to(device)
 
     print(model)
     print('Num Model Parameters', sum([param.nelement() for param in model.parameters()]))
 
     ### DATASET
-    # data_split = get_ballroom_folds(audio_dir)
-    data_split = {"train": [], "val": []}  # h5 files already saved
+    data_split = get_ballroom_folds(audio_dir)
+    # data_split = {"train": [], "val": []}  # h5 files already saved
 
     shapes = {"output_frames": hparams['input_sample']}
 
-    val_data = BallroomDataset(sr=44100, shapes=shapes, hdf_dir="./hdf/", data_split=data_split,
+    val_data = BallroomDataset(sr=args.sr, shapes=shapes, hdf_dir="./hdf/", data_split=data_split,
                             partition="val", audio_dir=audio_dir, annot_dir=annot_dir, in_memory=False)
-    train_data = BallroomDataset(sr=44100, shapes=shapes, hdf_dir="./hdf/", data_split=data_split,
+    train_data = BallroomDataset(sr=args.sr, shapes=shapes, hdf_dir="./hdf/", data_split=data_split,
                                partition="train", audio_dir=audio_dir, annot_dir=annot_dir, in_memory=False)
 
     kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if use_cuda else {}
@@ -139,7 +136,7 @@ def main(args):
         writer.add_scalar("train/learning_rate", lr, state["epochs"])
 
         # train
-        train_loss = train(model, device, train_loader, criterion, optimizer, None, state["epochs"], None, args.batch_size)
+        train_loss = train(model, device, train_loader, criterion, optimizer, args.batch_size)
         writer.add_scalar("train/epoch_loss", train_loss, state["epochs"])
 
         val_loss = validate(args.batch_size, model, criterion, val_loader, device)
