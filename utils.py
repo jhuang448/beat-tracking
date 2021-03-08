@@ -1,4 +1,4 @@
-import os, warnings
+import os
 
 import torch
 import torch.nn as nn
@@ -106,7 +106,6 @@ def load_model(model, optimizer, path, cuda):
 
 def validate(batch_size, model, criterion, dataloader, device):
 
-    # VALIDATE
     avg_time = 0.
     model.eval()
     total_loss = 0.
@@ -140,7 +139,6 @@ def predict(args, model, test_data, device):
 
     dbn_downbeat = DBNDownBeatTrackingProcessor(beats_per_bar=[2, 3, 4], fps=(44100 // 1024))
 
-    # PREPARE DATA
     dataloader = torch.utils.data.DataLoader(test_data,
                                              batch_size=1,
                                              shuffle=False,
@@ -164,7 +162,7 @@ def predict(args, model, test_data, device):
             x = eval_audio_transforms(x)
             x = nn.utils.rnn.pad_sequence(x, batch_first=True).unsqueeze(1).transpose(2, 3)
 
-            # Predict
+            # predict
             all_outputs = model(x)
 
             _, total_length, num_classes = all_outputs.shape  # batch, length, classes

@@ -37,7 +37,7 @@ def beatTracker(inputFile):
     x = eval_audio_transforms(x)
     x = nn.utils.rnn.pad_sequence(x, batch_first=True).unsqueeze(1).transpose(2, 3)
 
-    # Predict
+    # predict
     all_outputs = model(x)
 
     _, _, num_classes = all_outputs.shape
@@ -70,24 +70,26 @@ def main(args):
 
     print("Loading full model from checkpoint " + str(args.load_model))
 
+    # load model
     state = utils.load_model(model, None, args.load_model, args.cuda)
 
     data_split = {"test": []}  # h5 files already saved
     test_data = testDataset(sr=args.sr, hdf_dir="./hdf/", data_split=data_split,
                                partition="test", audio_dir=audio_dir, annot_dir=annot_dir, in_memory=False)
 
+    # evaluate
     results = utils.predict(args, model, test_data, device)
     print("Averaged F-measure (beat, downbeat):", results[0], results[1])
 
     # print("Style-wise F-measures (beat, downbeat)", results[2], results[3])
 
-    # madmom evaluation
+    # uncomment for madmom evaluation
     # results = utils.predict_madmom(audio_dir, annot_dir, "data_split.npz")
-    # print("Averaged F-measure (madmom):", results)
+    # print("Averaged F-measure (madmom):", results[0], results[1])
 
 
 if __name__ == '__main__':
-    ## EVALUATE PARAMETERS
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--cuda', action='store_true',
                         help='Use CUDA (default: False)')

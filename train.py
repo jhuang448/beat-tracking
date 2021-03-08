@@ -57,6 +57,7 @@ def train(model, device, train_loader, criterion, optimizer, batch_size):
 
 
 def main(args):
+    # define params
     hparams = {
         "n_rnn_layers": 3,
         "rnn_dim": 25,
@@ -68,16 +69,18 @@ def main(args):
         "batch_size": args.batch_size
     }
 
+    # detect device
     use_cuda = torch.cuda.is_available()
     seed_torch(2724)
     device = torch.device("cuda" if use_cuda else "cpu")
-    print(device)
 
+    # create dirs
     if not os.path.isdir(args.checkpoint_dir):
         os.makedirs(args.checkpoint_dir)
     if not os.path.isdir(args.log_dir):
         os.makedirs(args.log_dir)
 
+    # init model
     model = BeatTrackingModel(
         hparams['n_rnn_layers'], hparams['rnn_dim'],
         hparams['n_class'], hparams['n_feats'], hparams['dropout']
@@ -86,7 +89,7 @@ def main(args):
     print(model)
     print('Num Model Parameters', sum([param.nelement() for param in model.parameters()]))
 
-    ### DATASET
+    ### dataset
     data_split = get_ballroom_folds(audio_dir)
     # data_split = {"train": [], "val": [], "test": []}  # h5 files already saved
 
@@ -101,6 +104,7 @@ def main(args):
     test_data = BallroomDataset(sr=args.sr, shapes=shapes, hdf_dir="./hdf/", data_split=data_split,
                                 partition="test", audio_dir=audio_dir, annot_dir=annot_dir, in_memory=False)
 
+    # create dataloaders
     kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if use_cuda else {}
     train_loader = data.DataLoader(dataset=train_data,
                                    batch_size=hparams["batch_size"],
@@ -123,26 +127,31 @@ def main(args):
              "epochs": 0,
              "best_loss": np.Inf}
 
-    # LOAD MODEL CHECKPOINT IF DESIRED
+    # load model from checkpoint
     if args.load_model is not None:
         state = load_model(model, None, args.load_model, args.cuda)
 
+    # config tensorboard log
     from torch.utils.tensorboard import SummaryWriter
     import datetime
     current = datetime.datetime.now()
     writer = SummaryWriter(os.path.join(args.log_dir + current.strftime("%m:%d:%H:%M")))
 
-    while state["worse_epochs"] < 10: # or downbeat_flag == True:
+    # train & valid loop
+    while state["worse_epochs"] < 10:
         print("Training one epoch from epoch " + str(state["epochs"]))
 
+        # update lr
         lr = hparams['learning_rate'] / (((state["epochs"] // (20 * 1)) * 2) + 1)
         set_lr(optimizer, lr)
         writer.add_scalar("train/learning_rate", lr, state["epochs"])
 
         # train
         train_loss = train(model, device, train_loader, criterion, optimizer, args.batch_size)
+        print("TRAINING FINISHED: LOSS: " + str(train_loss))
         writer.add_scalar("train/epoch_loss", train_loss, state["epochs"])
 
+        # valid
         val_loss = validate(args.batch_size, model, criterion, val_loader, device)
         print("VALIDATION FINISHED: LOSS: " + str(val_loss))
         writer.add_scalar("val/loss", val_loss, state["epochs"])
@@ -169,7 +178,6 @@ def main(args):
 
 if __name__ == '__main__':
 
-    ## TRAIN PARAMETERS
     parser = argparse.ArgumentParser()
     parser.add_argument('--cuda', action='store_true',
                         help='Use CUDA (default: False)')

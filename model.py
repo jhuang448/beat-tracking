@@ -12,17 +12,11 @@ mel_spectrogram = nn.Sequential(
 )
 
 def train_audio_transforms(waveform):
-    s = mel_spectrogram(waveform)
-
     spec = mel_spectrogram(waveform).squeeze(0) # (n_mel, time)
-
     return spec.transpose(0, 1)
 
 def eval_audio_transforms(waveform):
-    w = waveform
-
-    spec = mel_spectrogram(w).squeeze(0) # (n_mel, time)
-
+    spec = mel_spectrogram(waveform).squeeze(0) # (n_mel, time)
     return spec.transpose(0, 1).unsqueeze(0)
 
 def data_processing(data):

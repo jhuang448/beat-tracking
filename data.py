@@ -50,29 +50,27 @@ class BallroomDataset(Dataset):
 
         self.audio_list = data_split[partition]
 
-        # PREPARE HDF FILE
-
-        # Check if HDF file exists already
+        # check if hdf5 file exists already
         if not os.path.exists(self.hdf_file):
-            # Create folder if it did not exist before
+            # create folder if it did not exist before
             if not os.path.exists(hdf_dir):
                 os.makedirs(hdf_dir)
 
-            # Create HDF file
+            # create hdf5 file
             with h5py.File(self.hdf_file, "w") as f:
                 f.attrs["sr"] = sr
 
                 print("Adding audio files to dataset (preprocessing)...")
                 for idx, audio_name in enumerate(tqdm(self.audio_list)):
 
-                    # Load song
+                    # load song
                     y, _ = load(path=os.path.join(audio_dir, audio_name), sr=self.sr, mono=True)
 
                     audio_basename = os.path.basename(audio_name)
                     beats = load_annot(os.path.join(annot_dir, audio_basename[:-4]+'.beats'))
                     annot_num = len(beats)
 
-                    # Add to HDF5 file
+                    # add to hdf5
                     grp = f.create_group(str(idx))
                     grp.create_dataset("inputs", shape=y.shape, dtype=y.dtype, data=y)
 
@@ -83,18 +81,17 @@ class BallroomDataset(Dataset):
 
                     grp.create_dataset("beats", shape=(annot_num, 2), dtype=np.float, data=beats)
 
-        # In that case, check whether sr and channels are complying with the audio in the HDF file, otherwise raise error
         with h5py.File(self.hdf_file, "r", libver='latest', swmr=True) as f:
             if f.attrs["sr"] != sr:
                 raise ValueError(
                     "Tried to load existing HDF file, but sampling rate is not as expected. Did you load an out-dated HDF file?")
 
-        # Go through HDF and collect lengths of all audio files
+        # collect lengths of all audio files
         with h5py.File(self.hdf_file, "r") as f:
             # length of song
             lengths = [f[str(song_idx)].attrs["input_length"] for song_idx in range(len(f))]
 
-            # Subtract input_size from lengths and divide by hop size to determine number of starting positions
+            # subtract input_size from lengths and divide by hop size to determine number of starting positions
             lengths = [np.int(np.ceil(l / self.hop)) for l in lengths]
 
         self.lengths = lengths
@@ -103,25 +100,25 @@ class BallroomDataset(Dataset):
 
     def __getitem__(self, index):
 
-        # Open HDF5
+        # open hdf5
         if self.hdf_dataset is None:
             driver = "core" if self.in_memory else None  # Load HDF5 fully into memory if desired
             self.hdf_dataset = h5py.File(self.hdf_file, 'r', driver=driver)
 
-        # Find out which slice of targets we want to read
+        # find out which slice of targets we want to read
         song_idx = self.start_pos.bisect_right(index)
         if song_idx > 0:
             index = index - self.start_pos[song_idx - 1]
 
-        # Check length of audio signal
+        # check length of audio signal
         audio_length = self.hdf_dataset[str(song_idx)].attrs["input_length"]
         annot_num = self.hdf_dataset[str(song_idx)].attrs["annot_num"]
 
-        # Determine position where to start targets
+        # determine position where to start targets
         start_target_pos = index * self.hop
         end_target_pos = start_target_pos + self.shapes["output_frames"]
 
-        # READ INPUTS
+        # read
         start_pos = start_target_pos
         end_pos = end_target_pos
         if end_pos > audio_length:
@@ -177,13 +174,12 @@ class testDataset(Dataset):
 
         self.audio_list = data_split[partition]
 
-        # Go through HDF and collect lengths of all audio files
         with h5py.File(self.hdf_file, "r") as f:
             self.length = len(f)
 
     def __getitem__(self, index):
 
-        # Open HDF5
+        # open hdf5
         if self.hdf_dataset is None:
             driver = "core" if self.in_memory else None  # Load HDF5 fully into memory if desired
             self.hdf_dataset = h5py.File(self.hdf_file, 'r', driver=driver)
