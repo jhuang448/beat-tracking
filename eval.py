@@ -1,4 +1,4 @@
-import argparse
+import argparse, warnings
 
 import torch
 import torch.nn as nn
@@ -46,7 +46,9 @@ def beatTracker(inputFile):
     song_pred = torch.sigmoid(song_pred).data.numpy()
 
     # dbn decoding
-    beat_info = dbn_downbeat(song_pred)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        beat_info = dbn_downbeat(song_pred)
     predicted_beats = beat_info[:, 0]
     mask = (beat_info[:, 1] == 1)
     predicted_downbeats = beat_info[mask, 0]
