@@ -139,22 +139,21 @@ def validate(batch_size, model, criterion, dataloader, device):
 
 def predict(args, model, test_data, device):
 
-    if not os.path.exists('pics'):
-        os.makedirs('pics')
+    # dbn = DBNBeatTrackingProcessor(
+    #     min_bpm=60,
+    #     max_bpm=240,
+    #     transition_lambda=100,
+    #     fps=(44100 // 1024),
+    #     online=True)
+    #
+    # dbn_downbeat = DBNBeatTrackingProcessor(
+    #     min_bpm=15,
+    #     max_bpm=80,
+    #     transition_lambda=100,
+    #     fps=(44100 // 1024),
+    #     online=True)
 
-    dbn = DBNBeatTrackingProcessor(
-        min_bpm=60,
-        max_bpm=240,
-        transition_lambda=100,
-        fps=(44100 // 1024),
-        online=True)
-
-    dbn_downbeat = DBNBeatTrackingProcessor(
-        min_bpm=15,
-        max_bpm=80,
-        transition_lambda=100,
-        fps=(44100 // 1024),
-        online=True)
+    dbn_downbeat = DBNDownBeatTrackingProcessor(beats_per_bar=[2, 3, 4], fps=(44100 // 1024))
 
     # PREPARE DATA
     dataloader = torch.utils.data.DataLoader(test_data,
@@ -164,12 +163,15 @@ def predict(args, model, test_data, device):
                                              collate_fn=my_collate)
     model.eval()
     f_accum = 0.
+    f_style_accum = {}
     f_accum_db = 0.
+    f_style_accum_db = {}
     with tqdm(total=len(test_data)) as pbar, torch.no_grad():
         for example_num, _data in enumerate(dataloader):
             x, b = _data
 
-            beats, downbeats = b[0]
+            beats, downbeats, audio_name = b[0]
+            style = audio_name.split('/')[0]
 
             x = move_data_to_device(x, device)
             x = x.squeeze(0)
@@ -187,20 +189,28 @@ def predict(args, model, test_data, device):
             beats_pred = torch.sigmoid(song_pred[:total_length, 0])
             downbeats_pred = torch.sigmoid(song_pred[:total_length, 1])
 
-            dbn.reset()
-            predicted_beats = dbn.process_offline(beats_pred.data.numpy())
+            # dbn.reset()
+            # predicted_beats = dbn.process_offline(beats_pred.data.numpy())
+
+            song_pred = torch.sigmoid(song_pred).data.numpy()
+            beat_info = dbn_downbeat(song_pred)
+            predicted_beats = beat_info[:, 0]
+            mask = (beat_info[:,1]==1)
+            predicted_downbeats = beat_info[mask, 0]
 
             scores = mir_eval.beat.evaluate(np.array(beats), predicted_beats)
             f_accum += scores['F-measure']
+            f_style_accum[style] = f_style_accum.get(style, []) + [scores['F-measure']]
 
-            dbn_downbeat.reset()
-            predicted_downbeats = dbn_downbeat.process_offline(downbeats_pred.data.numpy())
+            # dbn_downbeat.reset()
+            # predicted_downbeats = dbn_downbeat.process_offline(downbeats_pred.data.numpy())
             scores = mir_eval.beat.evaluate(np.array(downbeats), predicted_downbeats)
             f_accum_db += scores['F-measure']
+            f_style_accum_db[style] = f_style_accum_db.get(style, []) + [scores['F-measure']]
 
             pbar.update(1)
 
-    return f_accum / len(test_data), f_accum_db / len(test_data)
+    return f_accum / len(test_data), f_accum_db / len(test_data), f_style_accum, f_style_accum_db
 
 def predict_madmom(audio_dir, annot_dir, split_file):
 

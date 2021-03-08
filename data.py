@@ -80,7 +80,7 @@ class BallroomDataset(Dataset):
 
                     grp.attrs["annot_num"] = annot_num
                     grp.attrs["input_length"] = y.shape[1]
-                    grp.attrs["audio_name"] = audio_basename[:-4]
+                    grp.attrs["audio_name"] = audio_name # audio_basename[:-4]
                     # print(len(beats))
 
                     grp.create_dataset("beats", shape=(annot_num, 2), dtype=np.float, data=beats)
@@ -211,6 +211,7 @@ class testDataset(Dataset):
         # Check length of audio signal
         audio_length = self.hdf_dataset[str(song_idx)].attrs["input_length"]
         annot_num = self.hdf_dataset[str(song_idx)].attrs["annot_num"]
+        audio_name = self.hdf_dataset[str(song_idx)].attrs["audio_name"]
 
         # read audio and zero padding
         audio = self.hdf_dataset[str(song_idx)]["inputs"][0, :].astype(np.float32)
@@ -220,7 +221,7 @@ class testDataset(Dataset):
         downbeat_mask = (self.hdf_dataset[str(song_idx)]["beats"][:, 1] == 1)
         downbeats_pos = self.hdf_dataset[str(song_idx)]["beats"][downbeat_mask, 0]
 
-        return audio, (beats_pos, downbeats_pos)
+        return audio, (beats_pos, downbeats_pos, audio_name)
 
     def __len__(self):
         return self.length

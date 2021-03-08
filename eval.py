@@ -47,7 +47,7 @@ def beatTracker(inputFile):
         fps=(44100 // 1024),
         online=True)
 
-    state = utils.load_model(model, None, "checkpoints/master/lr-03/spec_aug/checkpoint_17", False)
+    state = utils.load_model(model, None, "checkpoints/checkpoint_best", False)
 
     y, _ = utils.load(inputFile, sr=44100, mono=True)
     x = torch.Tensor(y)
@@ -104,7 +104,9 @@ def main(args):
                                partition="test", audio_dir=audio_dir, annot_dir=annot_dir, in_memory=False)
 
     results = utils.predict(args, model, test_data, device)
-    print("Averaged F-measure (beat, downbeat):", results)
+    print("Averaged F-measure (beat, downbeat):", results[0], results[1])
+
+    print("Style-wise F-measures (beat, downbeat)", results[2], results[3])
 
     # results = utils.predict_madmom(audio_dir, annot_dir, "data_split.npz")
     # print("Averaged F-measure (madmom):", results)
