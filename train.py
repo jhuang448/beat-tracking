@@ -88,7 +88,7 @@ def main(args):
 
     ### DATASET
     data_split = get_ballroom_folds(audio_dir)
-    # data_split = {"train": [], "val": []}  # h5 files already saved
+    # data_split = {"train": [], "val": [], "test": []}  # h5 files already saved
 
     shapes = {"output_frames": hparams['input_sample']}
 
@@ -96,6 +96,10 @@ def main(args):
                             partition="val", audio_dir=audio_dir, annot_dir=annot_dir, in_memory=False)
     train_data = BallroomDataset(sr=args.sr, shapes=shapes, hdf_dir="./hdf/", data_split=data_split,
                                partition="train", audio_dir=audio_dir, annot_dir=annot_dir, in_memory=False)
+
+    # create test hdf5 file for evaluation
+    test_data = BallroomDataset(sr=args.sr, shapes=shapes, hdf_dir="./hdf/", data_split=data_split,
+                                partition="test", audio_dir=audio_dir, annot_dir=annot_dir, in_memory=False)
 
     kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if use_cuda else {}
     train_loader = data.DataLoader(dataset=train_data,

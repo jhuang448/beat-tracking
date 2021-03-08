@@ -1,4 +1,4 @@
-import os
+import os, warnings
 
 import torch
 import torch.nn as nn
@@ -172,7 +172,9 @@ def predict(args, model, test_data, device):
             song_pred = all_outputs.reshape(-1, num_classes)
 
             song_pred = torch.sigmoid(song_pred).data.numpy()
-            beat_info = dbn_downbeat(song_pred)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                beat_info = dbn_downbeat(song_pred)
             predicted_beats = beat_info[:, 0]
             mask = (beat_info[:, 1] == 1)
             predicted_downbeats = beat_info[mask, 0]
